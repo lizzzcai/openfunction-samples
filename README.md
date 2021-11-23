@@ -45,7 +45,7 @@ kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/re
 sh hack/delete.sh --all
 ```
 
-## Demo
+## How to deploy a function
 
 ### Create a push secret
 ```sh
@@ -62,7 +62,7 @@ kubectl create secret docker-registry push-secret \
 
 ```sh
 cd hello-world-go
-kubectl apply -f function-sample.yaml
+kubectl create -f function-sample.yaml
 ```
 
 ### View the status
@@ -71,13 +71,15 @@ kubectl apply -f function-sample.yaml
 ❯ kubectl get functions
 NAME              BUILDSTATE   SERVINGSTATE   BUILDER         SERVING   AGE
 function-sample   Created                     builder-6bf2s             61s
+```
 
+### Check the building process
+
+```sh
 ❯ kubectl get builders
 NAME            PHASE   STATE      AGE
 builder-6bf2s   Build   Building   70s
-```
 
-```sh
 ❯ kubectl get builds
 NAME                        REGISTERED   REASON      BUILDSTRATEGYKIND      BUILDSTRATEGYNAME   CREATIONTIME
 builder-cvkrg-build-5lz4g   True         Succeeded   ClusterBuildStrategy   openfunction        16m
@@ -87,19 +89,25 @@ NAME           AGE
 openfunction   3h37m
 
 ❯ kubectl get buildruns
+NAME                           SUCCEEDED   REASON    STARTTIME   COMPLETIONTIME
+builder-pzdgk-buildrun-jrkpz   Unknown     Running   103s
 
 ❯ kubectl get taskruns
-
+NAME                                 SUCCEEDED   REASON    STARTTIME   COMPLETIONTIME
+builder-pzdgk-buildrun-jrkpz-8q4cx   Unknown     Running   108s
 ```
+Once the function is built, the relative CR will be cleaned.
+
+### View the serving
 
 ```sh
 ❯ kubectl get servings
 NAME            PHASE     STATE     AGE
-serving-wbmxm   Serving   Running   145m
+serving-q9dsr   Serving   Running   20s
 
 ❯ kubectl get ksvc
 NAME                       URL                                                   LATESTCREATED                   LATESTREADY                     READY   REASON
-serving-wbmxm-ksvc-scmqq   http://serving-wbmxm-ksvc-scmqq.default.example.com   serving-wbmxm-ksvc-scmqq-v100   serving-wbmxm-ksvc-scmqq-v100   True    
+serving-q9dsr-ksvc-77w9x   http://serving-q9dsr-ksvc-77w9x.default.example.com   serving-q9dsr-ksvc-77w9x-v100   serving-q9dsr-ksvc-77w9x-v100   True
 ```
 
 ### Port-forward the ingress gateway
@@ -113,7 +121,7 @@ kubectl port-forward --namespace kourier-system svc/kourier 8080:80
 ```sh
 export INGRESS_HOST=localhost
 export INGRESS_PORT=8080
-SERVICE_NAME=serving-wbmxm-ksvc-scmqq
+SERVICE_NAME=serving-q9dsr-ksvc-77w9x
 SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ```
@@ -121,9 +129,9 @@ curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ### View the pod
 
 ```sh
-❯ k get po
+❯ kubectl get po
 NAME                                                        READY   STATUS    RESTARTS   AGE
-serving-wbmxm-ksvc-scmqq-v100-deployment-6cfc57d9fb-dtn22   2/2     Running   0          11s
+serving-q9dsr-ksvc-77w9x-v100-deployment-78f557b95b-9j66b   2/2     Running   0          28s
 ```
 
 ### Delete the function
