@@ -1,0 +1,21 @@
+apiVersion: core.openfunction.io/v1alpha2
+kind: Function
+metadata:
+  name: hello-world-python
+spec:
+  version: "v1.0.0"
+  image: "lizzzcai/sample-python-func:v0.4.0"
+  imageCredentials:
+    name: push-secret
+  port: 8080 # default to 8080
+  build:
+    builder: openfunction/builder:v1
+    env:
+      FUNC_NAME: "hello_world"
+      FUNC_TYPE: "http"
+      FUNC_SRC: "main.py"
+    srcRepo:
+      url: "https://github.com/lizzzcai/openfunction-samples.git"
+      sourceSubPath: "hello-world-python"
+  serving:
+    runtime: Knative # default to Knative

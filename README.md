@@ -58,14 +58,14 @@ kubectl create secret docker-registry push-secret \
     --docker-password=$REGISTRY_PASSWORD
 ```
 
-### Deploy a function
+### Deploy a Function
 
 ```sh
 cd hello-world-go
-kubectl create -f function-sample.yaml
+kubectl create -f hello-world-go.yaml
 ```
 
-### View the status
+### View the Function
 
 ```sh
 ❯ kubectl get functions
@@ -98,7 +98,7 @@ builder-pzdgk-buildrun-jrkpz-8q4cx   Unknown     Running   108s
 ```
 Once the function is built, the relative CR will be cleaned.
 
-### View the serving
+### View the Serving
 
 ```sh
 ❯ kubectl get servings
@@ -126,20 +126,196 @@ SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.stat
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ```
 
-### View the pod
+### View the Pod
 
 ```sh
-❯ kubectl get po
+❯ kubectl get pods
 NAME                                                        READY   STATUS    RESTARTS   AGE
 serving-q9dsr-ksvc-77w9x-v100-deployment-78f557b95b-9j66b   2/2     Running   0          28s
 ```
 
-### Delete the function
+### Delete the Function
 
 ```sh
-kubectl delete -f function-sample.yaml
+kubectl delete -f hello-world-go.yaml
 ```
+
+## How to debug
+
+### Build failed
+
+#### Check the Builder
+
+```sh
+❯ kubectl get builders
+NAME            PHASE   STATE    AGE
+builder-qx8w5   Build   Failed   11h
+
+❯  kubectl get builders -o yaml
+apiVersion: v1
+items:
+- apiVersion: core.openfunction.io/v1alpha2
+  kind: Builder
+  metadata:
+    creationTimestamp: "2021-11-23T14:58:29Z"
+    generateName: builder-
+    generation: 1
+    labels:
+      openfunction.io/function: hello-world-python
+    name: builder-qx8w5
+    namespace: default
+    ownerReferences:
+    - apiVersion: core.openfunction.io/v1alpha2
+      blockOwnerDeletion: true
+      controller: true
+      kind: Function
+      name: hello-world-python
+      uid: 9ec1a8a9-2b05-4117-a87a-c1a2e35a36f1
+    resourceVersion: "4232427"
+    uid: 9b689181-30b4-40f9-b2af-0973784abd17
+  spec:
+    builder: openfunction/builder:v1
+    env:
+      FUNC_NAME: hello_world
+      FUNC_SRC: main.py
+      FUNC_TYPE: http
+    image: lizzzcai/sample-python-func:v0.4.0
+    imageCredentials:
+      name: push-secret
+    port: 8080
+    srcRepo:
+      sourceSubPath: hello-world-python
+      url: https://github.com/lizzzcai/openfunction-samples.git
+  status:
+    phase: Build
+    resourceRef:
+      shipwright.io/build: builder-qx8w5-build-mn97k
+      shipwright.io/buildRun: builder-qx8w5-buildrun-x6q7b
+    state: Failed
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""
+```
+
+#### Check the Build
+
+```sh
+❯  kubectl get build
+NAME                        REGISTERED   REASON      BUILDSTRATEGYKIND      BUILDSTRATEGYNAME   CREATIONTIME
+builder-qx8w5-build-mn97k   True         Succeeded   ClusterBuildStrategy   openfunction        11h
+```
+
+#### Check the BuildRun
+```sh
+❯  kubectl get buildrun
+NAME                           SUCCEEDED   REASON   STARTTIME   COMPLETIONTIME
+builder-qx8w5-buildrun-x6q7b   False       Failed   11h         11h
+
+❯  kubectl get buildrun -o yaml
+apiVersion: v1
+items:
+- apiVersion: shipwright.io/v1alpha1
+  kind: BuildRun
+  metadata:
+    creationTimestamp: "2021-11-23T14:58:29Z"
+    generateName: builder-qx8w5-buildrun-
+    generation: 1
+    labels:
+      build.shipwright.io/generation: "1"
+      build.shipwright.io/name: builder-qx8w5-build-mn97k
+      openfunction.io/builder: builder-qx8w5
+    name: builder-qx8w5-buildrun-x6q7b
+    namespace: default
+    ownerReferences:
+    - apiVersion: core.openfunction.io/v1alpha2
+      blockOwnerDeletion: true
+      controller: true
+      kind: Builder
+      name: builder-qx8w5
+      uid: 9b689181-30b4-40f9-b2af-0973784abd17
+    resourceVersion: "4232426"
+    uid: b6309378-c55b-4ff3-b514-b410d6a42b29
+  spec:
+    buildRef:
+      name: builder-qx8w5-build-mn97k
+  status:
+    buildSpec:
+      builder:
+        image: openfunction/builder:v1
+      output:
+        credentials:
+          name: push-secret
+        image: lizzzcai/sample-python-func:v0.4.0
+      paramValues:
+      - name: APP_IMAGE
+        value: lizzzcai/sample-python-func:v0.4.0
+      - name: ENV_VARS
+        value: FUNC_NAME=hello_world#FUNC_SRC=main.py#FUNC_TYPE=http#PORT=8080
+      source:
+        contextDir: hello-world-python
+        url: https://github.com/lizzzcai/openfunction-samples.git
+      strategy:
+        kind: ClusterBuildStrategy
+        name: openfunction
+    completionTime: "2021-11-23T14:58:47Z"
+    conditions:
+    - lastTransitionTime: "2021-11-23T14:58:48Z"
+      message: 'buildrun step step-create failed in pod builder-qx8w5-buildrun-x6q7b-bnbl6-pod-l4kwf,
+        for detailed information: kubectl --namespace default logs builder-qx8w5-buildrun-x6q7b-bnbl6-pod-l4kwf
+        --container=step-create'
+      reason: Failed
+      status: "False"
+      type: Succeeded
+    failedAt:
+      container: step-create
+      pod: builder-qx8w5-buildrun-x6q7b-bnbl6-pod-l4kwf
+    latestTaskRunRef: builder-qx8w5-buildrun-x6q7b-bnbl6
+    startTime: "2021-11-23T14:58:30Z"
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""
+```
+
+#### Check the logs
+
+```sh
+❯ kubectl --namespace default logs builder-qx8w5-buildrun-x6q7b-bnbl6-pod-l4kwf --container=step-create
+===> DETECTING
+======== Error: google.dotnet.functions-framework@0.0.1 ========
+chdir /workspace/source/hello-world-python: no such file or directory
+======== Error: google.dotnet.runtime@0.9.1 ========
+chdir /workspace/source/hello-world-python: no such file or directory
+...
+```
+
+#### Check the TaskRun
+
+```sh
+❯ kubectl get taskruns
+NAME                                 SUCCEEDED   REASON   STARTTIME   COMPLETIONTIME
+builder-qx8w5-buildrun-x6q7b-bnbl6   False       Failed   11h         11h
+```
+
+#### Check the TaskRun in Tekton Dashboard
+
+Install the latest release of Tekton Dashboard
+
+```sh
+kubectl apply --filename https://github.com/tektoncd/dashboard/releases/latest/download/tekton-dashboard-release.yaml
+```
+
+Set up port forwarding with Tekton Dashboard
+
+```sh
+kubectl --namespace tekton-pipelines port-forward svc/tekton-dashboard 9097:9097
+```
+
+Once set up, the dashboard is available in the browser under the address http://localhost:9097.
+
 
 ## Reference
 * https://github.com/OpenFunction/OpenFunction
 * https://github.com/OpenFunction/samples
+* https://tekton.dev/docs/dashboard
