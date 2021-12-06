@@ -22,7 +22,8 @@ git clone https://github.com/OpenFunction/OpenFunction.git
 cd openfunction
 
 # install the prerequisties
-sh hack/deploy.sh --all
+# not include nginx ingress controller
+sh hack/deploy.sh --with-cert-manager --with-shipwright --with-knative --with-openFuncAsync
 
 # verification of dapr
 dapr status -k
@@ -49,6 +50,7 @@ sh hack/delete.sh --all
 
 ### Create a push secret
 ```sh
+# create docker-registry secret
 REGISTRY_SERVER=https://index.docker.io/v1/
 REGISTRY_USER=<your_registry_user>
 REGISTRY_PASSWORD=<your_registry_password>
@@ -56,6 +58,11 @@ kubectl create secret docker-registry push-secret \
     --docker-server=$REGISTRY_SERVER \
     --docker-username=$REGISTRY_USER \
     --docker-password=$REGISTRY_PASSWORD
+
+# create secret from dockerconfigjson
+kubectl create secret generic push-secret \
+  --from-file=.dockerconfigjson=docker-config.json \
+  --type=kubernetes.io/dockerconfigjson
 ```
 
 ### Deploy a Function
@@ -121,6 +128,15 @@ kubectl port-forward --namespace kourier-system svc/kourier 8080:80
 ```sh
 export INGRESS_HOST=localhost
 export INGRESS_PORT=8080
+SERVICE_NAME=serving-q9dsr-ksvc-77w9x
+SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
+curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
+```
+
+### If you have loadBalancer
+```sh
+export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].ip")
+export INGRESS_PORT=80
 SERVICE_NAME=serving-q9dsr-ksvc-77w9x
 SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT

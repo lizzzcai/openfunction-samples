@@ -1,0 +1,2 @@
+functions-framework==1.4.3
+numpy
