@@ -5,7 +5,7 @@ import pathlib
 from typing import Dict
 
 # dir_path = os.path.dirname(os.path.realpath(__file__))
-model_path = pathlib.Path(__file__).resolve().parent / 'model/model.joblib'
+model_path = pathlib.Path(__file__).resolve().parent / 'models/model.joblib'
 print("model path:", model_path)
 _model = joblib.load(model_path)
 
