@@ -9,8 +9,9 @@ model_path = pathlib.Path(__file__).resolve().parent / 'models/model.joblib'
 print("model path:", model_path)
 _model = joblib.load(model_path)
 
-def predict(request: Dict) -> Dict:
-    instances = request["instances"]
+def predict(request):
+    data = request.get_data()
+    instances = data["instances"]
     try:
         inputs = np.array(instances)
     except Exception as e:
