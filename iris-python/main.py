@@ -1,16 +1,16 @@
-import os
+import pathlib
 import joblib
 import numpy as np
-import pathlib
-from typing import Dict
 
-# dir_path = os.path.dirname(os.path.realpath(__file__))
 model_path = pathlib.Path(__file__).resolve().parent / 'models/model.joblib'
-print("model path:", model_path)
+print('model path: %s', model_path)
 _model = joblib.load(model_path)
 
 def predict(request):
-    data = request.get_data()
+    data = request.get_json()
+    if not data or "instances" not in data:
+        return "empty request or 'instances' not in request", 400
+    
     instances = data["instances"]
     try:
         inputs = np.array(instances)
