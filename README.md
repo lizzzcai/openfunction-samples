@@ -4,43 +4,89 @@
 
 ### Version
 
-* OpenFunction v0.4.0
+* OpenFunction v0.6.0
 
 ### Setup a Cluster
 
 ```sh
 minikube start -p demo --kubernetes-version=v1.22.2 --network-plugin=cni --cni=calico
 ```
+### Install Istio
+
+TBD
+
+### Setup Prerequisites
+
+```sh
+# install the prerequisites, not including nginx ingress controller
+# If you want to install nginx ingress controller, please add --with-ingress
+sh scripts/deploy.sh --with-cert-manager --with-shipwright --with-openFuncAsync  --with-knative
+
+# verification of dapr
+dapr status -k
+
+# verification of knative
+kubectl get pods -n knative-serving
+```
+
+### Setup your Ingress Gateway
+
+Choose either Kourier or Istio
+#### Use Kourier
+
+```sh
+# Configure Knative Serving to use Kourier by default by running the command:
+kubectl patch configmap/config-network \
+  --namespace knative-serving \
+  --type merge \
+  --patch '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}'
+
+# Fetch the External IP address or CNAME by running the command:
+kubectl --namespace kourier-system get service kourier
+```
+
+#### Use Istio
+
+```sh
+# Install the Knative Istio controller by running the command:
+kubectl apply -f https://github.com/knative/net-istio/releases/download/knative-v1.2.0/net-istio.yaml
+
+# Fetch the External IP address or CNAME by running the command:
+kubectl --namespace istio-system get service istio-ingressgateway
+```
+
+#### Configure DNS
+
+```sh
+# Configure your DNS
+# Replace knative.example.com with your domain suffix
+kubectl patch configmap/config-domain \
+  --namespace knative-serving \
+  --type merge \
+  --patch '{"data":{"a41592c7b5xxxxxxxxxxxd485f-1634070567.eu-central-1.elb.amazonaws.com":""}}'
+```
 
 ### Install OpenFunction
 
 ```sh
-# clone repo
-git clone https://github.com/OpenFunction/OpenFunction.git
-
-# enter the repo
-cd openfunction
-
-# install the prerequisties
-# not include nginx ingress controller
-sh hack/deploy.sh --with-cert-manager --with-shipwright --with-knative --with-openFuncAsync
-
-# verification of dapr
-dapr status -k
-```
-
-```sh
 # install openfunction
-kubectl create -f https://github.com/OpenFunction/OpenFunction/releases/download/v0.4.0/bundle.yaml
+kubectl create -f https://github.com/OpenFunction/OpenFunction/releases/download/v0.6.0/bundle.yaml
+
+# install latest openfunction
+kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
 
 # verfication
 kubectl get pods --namespace openfunction
 ```
 
 ### Uninstall OpenFunction
+
 ```sh
 # delete openfunction
-kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/release-0.4/config/bundle.yaml
+kubectl delete -f https://github.com/OpenFunction/OpenFunction/releases/download/v0.6.0/bundle.yaml
+
+# uninstall latest openfunction
+kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
 
 # delete the prerequisties
 sh hack/delete.sh --all
@@ -49,8 +95,9 @@ sh hack/delete.sh --all
 ## How to deploy a function
 
 ### Create a push secret
+
 ```sh
-# create docker-registry secret
+# create docker registry secret
 REGISTRY_SERVER=https://index.docker.io/v1/
 REGISTRY_USER=<your_registry_user>
 REGISTRY_PASSWORD=<your_registry_password>
@@ -59,7 +106,7 @@ kubectl create secret docker-registry push-secret \
     --docker-username=$REGISTRY_USER \
     --docker-password=$REGISTRY_PASSWORD
 
-# create secret from dockerconfigjson
+# or create secret from dockerconfigjson
 kubectl create secret generic push-secret \
   --from-file=.dockerconfigjson=docker-config.json \
   --type=kubernetes.io/dockerconfigjson
@@ -103,6 +150,7 @@ builder-pzdgk-buildrun-jrkpz   Unknown     Running   103s
 NAME                                 SUCCEEDED   REASON    STARTTIME   COMPLETIONTIME
 builder-pzdgk-buildrun-jrkpz-8q4cx   Unknown     Running   108s
 ```
+
 Once the function is built, the relative CR will be cleaned.
 
 ### View the Serving
@@ -120,7 +168,10 @@ serving-q9dsr-ksvc-77w9x   http://serving-q9dsr-ksvc-77w9x.default.example.com  
 ### Port-forward the ingress gateway
 
 ```sh
+# if using kourier
 kubectl port-forward --namespace kourier-system svc/kourier 8080:80
+# if using istio ingress gateway
+kubectl port-forward --namespace istio-system  svc/istio-ingressgateway 8080:80
 ```
 
 ### Curl from ingress gateway with HOST Header
@@ -135,14 +186,17 @@ curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 
 ### If you have loadBalancer
 ```sh
-export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].ip")
+# if using kourier
+export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# if using istio ingress gateway
+export INGRESS_HOST=$(kubectl --namespace istio-system get service istio-ingressgateway -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
 export INGRESS_PORT=80
 SERVICE_NAME=serving-q9dsr-ksvc-77w9x
 SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ```
 
-### View the Pod
+### View the Pods
 
 ```sh
 ❯ kubectl get pods
@@ -294,7 +348,7 @@ metadata:
   selfLink: ""
 ```
 
-#### Check the logs
+#### Check the logs of the BuildRun pod
 
 ```sh
 ❯ kubectl --namespace default logs builder-qx8w5-buildrun-x6q7b-bnbl6-pod-l4kwf --container=step-create
@@ -322,7 +376,7 @@ Install the latest release of Tekton Dashboard
 kubectl apply --filename https://github.com/tektoncd/dashboard/releases/latest/download/tekton-dashboard-release.yaml
 ```
 
-Set up port forwarding with Tekton Dashboard
+Port-forwarding Tekton Dashboard
 
 ```sh
 kubectl --namespace tekton-pipelines port-forward svc/tekton-dashboard 9097:9097
