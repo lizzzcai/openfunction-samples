@@ -1,4 +1,4 @@
-# SKLearn Iris Classfication
+# SKLearn Iris Classification
 
 ## Create your own model
 
@@ -47,6 +47,21 @@ SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.stat
 curl -v -H "Content-Type: application/json" -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT -d $INPUT_PATH
 ```
 
+## Build it and run it locally
+
+```sh
+# build it
+pack build my-iris-python \
+	--path . \
+	--env GOOGLE_FUNCTION_SIGNATURE_TYPE="http" \
+	--env GOOGLE_FUNCTION_TARGET="predict" \
+	--env GOOGLE_FUNCTION_SOURCE="main.py" \
+	--builder openfunction/gcp-builder:v1
+
+# run it
+docker run --rm -p 8080:8080 my-iris-python
+```
+
 ## Debug a function
 
 ```
@@ -60,13 +75,12 @@ model path: /Users/i543026/dev/demo/openfunction-demo/iris-python/models/model.j
  * Running on http://0.0.0.0:8080/ (Press CTRL+C to quit)
 ```
 
-Send a request
-```
-INPUT_PATH=@./iris-input.json
-curl -v -X POST -H "Content-Type: application/json"  http://localhost:8080 -d $INPUT_PATH
+## Send a request
+
+```sh
+curl -v -X POST -H "Content-Type: application/json" "http://localhost:8080" -d @./iris-input.json
 ```
 
 ## Open points
 
 * Is possible to load model from storage like `s3` by [AWS s3 binding](https://docs.dapr.io/reference/components-reference/supported-bindings/s3/). (define it in the function.yaml, load the model from the logic)
-
