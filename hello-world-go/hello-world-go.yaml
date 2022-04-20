@@ -1,20 +1,54 @@
-apiVersion: core.openfunction.io/v1alpha2
+apiVersion: core.openfunction.io/v1beta1
 kind: Function
 metadata:
   name: hello-world-go
+  labels:
+    app: hello-world-go
+    env: dev
 spec:
   version: "v1.0.0"
-  image: "lizzzcai/sample-go-func:v0.4.0"
+  image: "lizzzcai/sample-go-func:v0.6.0"
   imageCredentials:
     name: push-secret
-  port: 8080 # default to 8080
+  port: 8080
   build:
-    builder: openfunction/builder:v1
+    successfulBuildsHistoryLimit: 2
+    failedBuildsHistoryLimit: 3
+    timeout: 10m
+    builder: openfunction/builder-go:latest
     env:
       FUNC_NAME: "HelloWorld"
       FUNC_TYPE: "http"
+      FUNC_CLEAR_SOURCE: "true"
     srcRepo:
       url: "https://github.com/lizzzcai/openfunction-samples.git"
       sourceSubPath: "hello-world-go"
   serving:
-    runtime: Knative # default to Knative
+    runtime: knative
+    timeout: 5m
+    labels:
+      app: openfunction
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      autoscaling.knative.dev/class: "kpa.autoscaling.knative.dev"
+      autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
+      autoscaling.knative.dev/metric: "concurrency" # concurrency, rps, cpu, memory
+      autoscaling.knative.dev/target: "2" # metric agnostic
+      autoscaling.knative.dev/target-utilization-percentage: "80"
+      #autoscaling.knative.dev/min-scale: "0"
+      autoscaling.knative.dev/initial-scale: "1"
+      #autoscaling.knative.dev/max-scale: "3"
+      autoscaling.knative.dev/scale-down-delay: "10m"
+      autoscaling.knative.dev/window: 60s
+    scaleOptions:
+      knative:
+        dummy: test
+        #autoscaling.knative.dev/min-scale: "0"
+        #autoscaling.knative.dev/max-scale: "2"
+      maxReplicas: 5
+      minReplicas: 1
+
+    template:
+      containers:
+        - name: function
+          imagePullPolicy: Always
