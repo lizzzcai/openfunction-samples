@@ -40,13 +40,17 @@ kubectl apply -f iris-python.yaml
 
 ## Run a prediction
 
-```
-INGRESS_HOST=...
-INGRESS_PORT=...
+```sh
+# if using kourier
+export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# if using istio ingress gateway
+export INGRESS_HOST=$(kubectl --namespace istio-system get service istio-ingressgateway -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+export INGRESS_PORT=80
+# kubectl get ksvc
+SERVICE_NAME=serving-ggtk4-ksvc-hqz2m
 INPUT_PATH=@./iris-input.json
-SERVICE_NAME=serving-8pxmd-ksvc-zbvr2
 SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
-curl -v -H "Content-Type: application/json" -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT -d $INPUT_PATH
+curl -v -X POST -H "Content-Type: application/json" -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT -d $INPUT_PATH
 ```
 
 ## Build it and run it locally
@@ -66,7 +70,7 @@ docker run --rm -p 8080:8080 my-iris-python
 
 ## Debug a function
 
-```
+```sh
 ❯ functions-framework --target predict --debug
 model path: /Users/i543026/dev/demo/openfunction-demo/iris-python/models/model.joblib
  * Serving Flask app "predict" (lazy loading)

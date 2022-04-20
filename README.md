@@ -29,6 +29,15 @@ dapr status -k
 kubectl get pods -n knative-serving
 ```
 
+### Enable KNative features
+
+```sh
+kubectl patch configmap/config-features \
+  --namespace knative-serving \
+  --type merge \
+  --patch '{"data":{"kubernetes.podspec-persistent-volume-claim":"enabled", "kubernetes.podspec-persistent-volume-write":"enabled", "kubernetes.podspec-init-containers":"enabled", "kubernetes.podspec-nodeselector":"enabled", "kubernetes.podspec-volumes-emptydir": "enabled"}}'
+```
+
 ### Setup your Ingress Gateway
 
 Choose either Kourier or Istio
