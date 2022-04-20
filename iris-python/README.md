@@ -1,5 +1,7 @@
 # SKLearn Iris Classification
 
+This example is packing the models within the docker image. In real scenario, the model may comes from a remote storage.
+
 ## Create your own model
 
 ```python
