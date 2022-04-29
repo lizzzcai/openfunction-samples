@@ -31,7 +31,7 @@ istioctl install -y
 ```sh
 # install the prerequisites, not including nginx ingress controller
 # If you want to install nginx ingress controller, please add --with-ingress
-sh scripts/deploy.sh --with-cert-manager --with-shipwright --with-openFuncAsync  --with-knative
+sh scripts/deploy.sh --with-cert-manager --with-shipwright --with-openFuncAsync --with-knative
 
 # verification of dapr
 dapr status -k
@@ -204,7 +204,8 @@ SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.stat
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ```
 
-### If you have loadBalancer
+### If you have a loadBalancer
+
 ```sh
 # if using kourier
 export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
