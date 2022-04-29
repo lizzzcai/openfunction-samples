@@ -13,7 +13,18 @@ minikube start -p demo --kubernetes-version=v1.22.2 --network-plugin=cni --cni=c
 ```
 ### Install Istio
 
-TBD
+```sh
+ISTIO_VERSION=1.11.8
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} TARGET_ARCH=x86_64 sh -
+
+cd istio-${ISTIO_VERSION}
+export PATH=$PWD/bin:$PATH
+
+istioctl x precheck
+
+# To install Istio
+istioctl install -y
+```
 
 ### Setup Prerequisites
 
