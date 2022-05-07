@@ -94,6 +94,11 @@ kubectl create -f https://github.com/OpenFunction/OpenFunction/releases/download
 
 # install latest openfunction
 kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
+# update latest strategy for latest ofn
+kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/strategy/build-strategy.yaml
+# create domain (optional)
+kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/domain/default-domain.yaml
+
 
 # verfication
 kubectl get pods --namespace openfunction
@@ -107,6 +112,8 @@ kubectl delete -f https://github.com/OpenFunction/OpenFunction/releases/download
 
 # uninstall latest openfunction
 kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
+kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/strategy/build-strategy.yaml
+kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/domain/default-domain.yaml
 
 # delete the prerequisties
 sh hack/delete.sh --all
@@ -212,7 +219,7 @@ export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o 
 # if using istio ingress gateway
 export INGRESS_HOST=$(kubectl --namespace istio-system get service istio-ingressgateway -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
 export INGRESS_PORT=80
-SERVICE_NAME=serving-q9dsr-ksvc-77w9x
+SERVICE_NAME=serving-q9dsr-ksvc-77w9x # kubectl get ksvc
 SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
 curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
 ```
