@@ -4,43 +4,42 @@
 
 ### Version
 
-* OpenFunction v0.6.0
+* OpenFunction v0.7.0
 
 ### Setup a Cluster
 
 ```sh
 minikube start -p demo --kubernetes-version=v1.22.2 --network-plugin=cni --cni=calico
 ```
-### Install Istio
+
+### Install OpenFunction by HelmChart
 
 ```sh
-ISTIO_VERSION=1.11.8
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} TARGET_ARCH=x86_64 sh -
+# add helm repo
+helm repo add openfunction https://openfunction.github.io/charts/
+helm repo update
 
-cd istio-${ISTIO_VERSION}
-export PATH=$PWD/bin:$PATH
+# install
+helm upgrade --install -f openfunction.yaml openfunction --create-namespace --namespace=openfunction openfunction/openfunction
 
-istioctl x precheck
-
-# To install Istio
-istioctl install -y
-```
-
-### Setup Prerequisites
-
-```sh
-# install the prerequisites, not including nginx ingress controller
-# If you want to install nginx ingress controller, please add --with-ingress
-sh scripts/deploy.sh --with-cert-manager --with-shipwright --with-openFuncAsync --with-knative
+# verfication
+kubectl get pods --namespace openfunction
 
 # verification of dapr
-dapr status -k
+kubectl get po -n dapr-system
 
 # verification of knative
 kubectl get pods -n knative-serving
 ```
 
-### Enable KNative features
+### Uninstall OpenFunction
+
+```sh
+# uninstall
+helm delete openfunction -n openfunction
+```
+
+### Enable KNative features (Optional)
 
 ```sh
 kubectl patch configmap/config-features \
@@ -51,72 +50,166 @@ kubectl patch configmap/config-features \
 
 ### Setup your Ingress Gateway
 
-Choose either Kourier or Istio
-#### Use Kourier
+Choose either Contour, Istio or any gateways that support Kubernetes Gateway API
+
+#### Use Contour [default]
+
+Contour is the default gateway in OpenFunction.
 
 ```sh
-# Configure Knative Serving to use Kourier by default by running the command:
-kubectl patch configmap/config-network \
-  --namespace knative-serving \
-  --type merge \
-  --patch '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}'
-
 # Fetch the External IP address or CNAME by running the command:
-kubectl --namespace kourier-system get service kourier
+kubectl --namespace projectcontour get svc/contour-envoy
+```
+
+Steps showing below are already done via Helm Chart. Example given below are using contour dynamic provision.
+
+##### Create a GatewayClass named contour
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: GatewayClass
+metadata:
+  name: contour
+spec:
+  # Dynamically provisioned: https://projectcontour.io/guides/gateway-api/
+  controllerName: projectcontour.io/gateway-controller
+  description: The default Contour GatewayClass
+EOF
+
+# Uninstall GatewayClass
+kubectl delete GatewayClass contour
+```
+
+##### Create an OpenFunction Gateway
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: networking.openfunction.io/v1alpha1
+kind: Gateway
+metadata:
+  name: openfunction
+  namespace: openfunction
+spec:
+  domain: ofn.io
+  clusterDomain: cluster.local
+  hostTemplate: "{{.Name}}.{{.Namespace}}.{{.Domain}}"
+  pathTemplate: "{{.Namespace}}/{{.Name}}"
+  gatewayDef:
+    namespace: projectcontour
+    gatewayClassName: contour
+  gatewaySpec:
+    listeners:
+    - allowedRoutes:
+        namespaces:
+          from: All
+      hostname: '*.cluster.local'
+      name: ofn-http-internal
+      port: 80
+      protocol: HTTP
+    - allowedRoutes:
+        namespaces:
+          from: All
+      hostname: '*.ofn.io'
+      name: ofn-http-external
+      port: 80
+      protocol: HTTP
+EOF
+
+# Uninstall Gateway
+kubectl delete Gateway -n openfunction openfunction
 ```
 
 #### Use Istio
 
+Reference: https://openfunction.dev/docs/operations/networking/switch-gateway/
+
+You can `disable` Contour when installing openfunction.
+```sh
+helm install openfunction --set global.Contour.enabled=false openfunction/openfunction -n openfunction
+```
+
+##### Install Istio
+
+```sh
+### Download Istio
+ISTIO_VERSION=1.13.8
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} TARGET_ARCH=x86_64 sh -
+
+cd istio-${ISTIO_VERSION}
+export PATH=$PWD/bin:$PATH
+cd ..
+
+istioctl x precheck
+
+# Install Istio
+istioctl install -y
+```
+
+##### Create a GatewayClass named istio
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: GatewayClass
+metadata:
+  name: istio
+spec:
+  controllerName: istio.io/gateway-controller
+  description: The default Istio GatewayClass
+EOF
+
+# Uninstall GatewayClass
+kubectl delete GatewayClass istio
+```
+
+##### Create an OpenFunction Gateway
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: networking.openfunction.io/v1alpha1
+kind: Gateway
+metadata:
+  name: custom-gateway
+  namespace: openfunction
+spec:
+  domain: ofn.io
+  clusterDomain: cluster.local
+  hostTemplate: "{{.Name}}.{{.Namespace}}.{{.Domain}}"
+  pathTemplate: "{{.Namespace}}/{{.Name}}"
+  gatewayDef:
+    namespace: istio-system
+    gatewayClassName: istio
+  gatewaySpec:
+    listeners:
+    - allowedRoutes:
+        namespaces:
+          from: All
+      hostname: '*.cluster.local'
+      name: ofn-http-internal
+      port: 80
+      protocol: HTTP
+    - allowedRoutes:
+        namespaces:
+          from: All
+      hostname: '*.ofn.io'
+      name: ofn-http-external
+      port: 80
+      protocol: HTTP
+EOF
+
+# Uninstall Gateway
+kubectl delete Gateway -n openfunction custom-gateway
+```
+
+##### Setup Knative Integration
+
 ```sh
 # Install the Knative Istio controller by running the command:
-kubectl apply -f https://github.com/knative/net-istio/releases/download/knative-v1.2.0/net-istio.yaml
+kubectl apply -f https://github.com/knative/net-istio/releases/download/knative-v1.3.0/net-istio.yaml
 
 # Fetch the External IP address or CNAME by running the command:
-kubectl --namespace istio-system get service istio-ingressgateway
-```
-
-#### Configure DNS
-
-```sh
-# Configure your DNS
-# Replace knative.example.com with your domain suffix
-kubectl patch configmap/config-domain \
-  --namespace knative-serving \
-  --type merge \
-  --patch '{"data":{"a41592c7b5xxxxxxxxxxxd485f-1634070567.eu-central-1.elb.amazonaws.com":""}}'
-```
-
-### Install OpenFunction
-
-```sh
-# install openfunction
-kubectl create -f https://github.com/OpenFunction/OpenFunction/releases/download/v0.6.0/bundle.yaml
-
-# install latest openfunction
-kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
-# update latest strategy for latest ofn
-kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/strategy/build-strategy.yaml
-# create domain (optional)
-kubectl create -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/domain/default-domain.yaml
-
-
-# verfication
-kubectl get pods --namespace openfunction
-```
-
-### Uninstall OpenFunction
-
-```sh
-# delete openfunction
-kubectl delete -f https://github.com/OpenFunction/OpenFunction/releases/download/v0.6.0/bundle.yaml
-
-# uninstall latest openfunction
-kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/bundle.yaml
-kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/strategy/build-strategy.yaml
-kubectl delete -f https://raw.githubusercontent.com/OpenFunction/OpenFunction/main/config/domain/default-domain.yaml
-
-# delete the prerequisties
-sh hack/delete.sh --all
+kubectl --namespace istio-system get svc/istio-ingressgateway
 ```
 
 ## How to deploy a function
@@ -150,32 +243,35 @@ kubectl create -f hello-world-go.yaml
 
 ```sh
 ❯ kubectl get functions
-NAME              BUILDSTATE   SERVINGSTATE   BUILDER         SERVING   AGE
-function-sample   Created                     builder-6bf2s             61s
+NAME             BUILDSTATE   SERVINGSTATE   BUILDER         SERVING         ADDRESS                                            AGE
+hello-world-go   Succeeded    Running        builder-2q5sf   serving-94ggm   http://hello-world-go.default.svc.cluster.local/   10m
 ```
 
 ### Check the building process
 
 ```sh
 ❯ kubectl get builders
-NAME            PHASE   STATE      AGE
-builder-6bf2s   Build   Building   70s
+NAME            PHASE   STATE       REASON      AGE
+builder-2q5sf   Build   Succeeded   Succeeded   12m
 
 ❯ kubectl get builds
 NAME                        REGISTERED   REASON      BUILDSTRATEGYKIND      BUILDSTRATEGYNAME   CREATIONTIME
-builder-cvkrg-build-5lz4g   True         Succeeded   ClusterBuildStrategy   openfunction        16m
+builder-2q5sf-build-kkqzx   True         Succeeded   ClusterBuildStrategy   openfunction        12m
 
 ❯ kubectl get ClusterBuildStrategies
 NAME           AGE
-openfunction   3h37m
+buildah        21m
+kaniko         21m
+ko             21m
+openfunction   21m
 
 ❯ kubectl get buildruns
-NAME                           SUCCEEDED   REASON    STARTTIME   COMPLETIONTIME
-builder-pzdgk-buildrun-jrkpz   Unknown     Running   103s
+NAME                           SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+builder-2q5sf-buildrun-v5fmw   True        Succeeded   13m         11m
 
 ❯ kubectl get taskruns
-NAME                                 SUCCEEDED   REASON    STARTTIME   COMPLETIONTIME
-builder-pzdgk-buildrun-jrkpz-8q4cx   Unknown     Running   108s
+NAME                                 SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+builder-2q5sf-buildrun-v5fmw-fhksw   True        Succeeded   13m         11m
 ```
 
 Once the function is built, the relative CR will be cleaned.
@@ -185,20 +281,27 @@ Once the function is built, the relative CR will be cleaned.
 ```sh
 ❯ kubectl get servings
 NAME            PHASE     STATE     AGE
-serving-q9dsr   Serving   Running   20s
+serving-94ggm   Serving   Running   20s
 
 ❯ kubectl get ksvc
 NAME                       URL                                                   LATESTCREATED                   LATESTREADY                     READY   REASON
-serving-q9dsr-ksvc-77w9x   http://serving-q9dsr-ksvc-77w9x.default.example.com   serving-q9dsr-ksvc-77w9x-v100   serving-q9dsr-ksvc-77w9x-v100   True
+serving-94ggm-ksvc-424rt   http://serving-94ggm-ksvc-424rt.default.example.com   serving-94ggm-ksvc-424rt-v100   serving-94ggm-ksvc-424rt-v100   True
+```
+
+### Check function addresses
+
+```sh
+❯ kubectl get function hello-world-go -o=jsonpath='{.status.addresses}'
+[{"type":"External","value":"http://hello-world-go.default.ofn.io/"},{"type":"Internal","value":"http://hello-world-go.default.svc.cluster.local/"}]%
 ```
 
 ### Port-forward the ingress gateway
 
 ```sh
-# if using kourier
-kubectl port-forward --namespace kourier-system svc/kourier 8080:80
-# if using istio ingress gateway
-kubectl port-forward --namespace istio-system  svc/istio-ingressgateway 8080:80
+# if using contour (always using the contour-envoy if using static provisioning)
+kubectl port-forward --namespace projectcontour svc/contour-envoy 8080:80
+# if using istio
+kubectl port-forward --namespace istio-system  svc/custom-gateway 8080:80 # gateway name same as your openfunction gateway
 ```
 
 ### Curl from ingress gateway with HOST Header
@@ -206,22 +309,31 @@ kubectl port-forward --namespace istio-system  svc/istio-ingressgateway 8080:80
 ```sh
 export INGRESS_HOST=localhost
 export INGRESS_PORT=8080
-SERVICE_NAME=serving-q9dsr-ksvc-77w9x
-SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
-curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
+FUNCTION_NAME=hello-world-go # kubectl get functions
+SERVICE_HOSTNAME=$(kubectl get functions $FUNCTION_NAME -n default -o jsonpath='{.status.addresses[0].value}' | cut -d "/" -f 3)
+curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT/openfunction
 ```
 
 ### If you have a loadBalancer
 
 ```sh
-# if using kourier
-export INGRESS_HOST=$(kubectl --namespace kourier-system get service kourier -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# if using contour
+# from envoy-<gateway> service (if using dynamic provisioning)
+export INGRESS_HOST=$(kubectl --namespace projectcontour get service envoy-openfunction  -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# from k8s gateway
+export INGRESS_HOST=$(kubectl --namespace projectcontour get gateways.gateway.networking.k8s.io openfunction -o json | jq -r ".status.addresses[0].value")
+
 # if using istio ingress gateway
-export INGRESS_HOST=$(kubectl --namespace istio-system get service istio-ingressgateway -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# from gateway service
+export INGRESS_HOST=$(kubectl --namespace istio-system get service custom-gateway -o json | jq -r ".status.loadBalancer.ingress[0].hostname")
+# from k8s gateway
+export INGRESS_HOST=$(kubectl --namespace istio-system get gateways.gateway.networking.k8s.io custom-gateway -o json | jq -r ".status.addresses[0].value")
+
 export INGRESS_PORT=80
-SERVICE_NAME=serving-q9dsr-ksvc-77w9x # kubectl get ksvc
-SERVICE_HOSTNAME=$(kubectl get ksvc $SERVICE_NAME -n default -o jsonpath='{.status.url}' | cut -d "/" -f 3)
-curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT
+FUNCTION_NAME=hello-world-go # kubectl get functions
+SERVICE_HOSTNAME=$(kubectl get functions $FUNCTION_NAME -n default -o jsonpath='{.status.addresses[0].value}' | cut -d "/" -f 3)
+# send a request
+curl -v -H "Host: $SERVICE_HOSTNAME" http://$INGRESS_HOST:$INGRESS_PORT/openfunction
 ```
 
 ### View the Pods
@@ -413,7 +525,24 @@ kubectl --namespace tekton-pipelines port-forward svc/tekton-dashboard 9097:9097
 Once set up, the dashboard is available in the browser under the address http://localhost:9097.
 
 
+### Install Dapr locally (Optional)
+
+This is to setup Dapr locally for local development
+```sh
+dapr_version=1.8.3
+wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash -s ${dapr_version}
+dapr init --runtime-version ${dapr_version}
+
+dapr --version
+
+ls $HOME/.dapr
+
+# uninstall
+dapr uninstall --all
+```
+
 ## Reference
 * https://github.com/OpenFunction/OpenFunction
 * https://github.com/OpenFunction/samples
 * https://tekton.dev/docs/dashboard
+* https://projectcontour.io/guides/gateway-api/

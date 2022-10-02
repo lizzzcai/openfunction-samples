@@ -1,0 +1,13 @@
+global:
+  Dapr:
+    enabled: true
+  Keda:
+    enabled: true
+  KnativeServing:
+    enabled: true
+  TektonPipelines:
+    enabled: true
+  ShipwrightBuild:
+    enabled: true
+  Contour:
+    enabled: true

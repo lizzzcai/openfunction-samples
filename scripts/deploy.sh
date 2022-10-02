@@ -15,12 +15,13 @@
 # limitations under the License.
 
 cert_manager_version=v1.7.1
-tekton_pipeline_version=v0.30.0
-shipwright_version=v0.6.0
-knative_version=v1.2.5
+tekton_pipeline_version=v0.37.2
+shipwright_version=v0.10.0
+knative_version=v1.3.2
 kourier_version=v1.2.0
-dapr_version=1.5.1
-keda_version=2.4.0
+dapr_version=1.8.3
+keda_version=2.7.1
+# contour_version=1.21.1
 
 all=false
 with_cert_manager=false
