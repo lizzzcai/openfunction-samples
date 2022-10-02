@@ -47,8 +47,8 @@ spec:
         dummy: test
         #autoscaling.knative.dev/min-scale: "0"
         #autoscaling.knative.dev/max-scale: "2"
-      maxReplicas: 5
-      minReplicas: 1
+      maxReplicas: 2
+      minReplicas: 0
     template:
       containers:
         - name: function
